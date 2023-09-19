@@ -49,10 +49,24 @@ let
       (mkAfter [ (toString hmExcludeFile) ]);
     options = {
       location = {
-        sourceDirectories = mkOption {
+        sourceDirectories = mkNullableOption {
           type = types.listOf types.str;
-          description = "Directories to backup.";
+          default = null;
+          description = "Directories to backup. Only one of sourceDirectories or patterns should be set.";
           example = literalExpression "[config.home.homeDirectory]";
+        };
+
+        patterns = mkNullableOption {
+          type = types.listOf types.str;
+          default = null;
+          description = "Patterns for included/excluded directories. Only one of sourceDirectories of patterns should be set.";
+          example = literalExpression ''
+            [
+              "R $\{config.home.homeDirectory}"
+              "- .*"
+              ".ssh"
+            ]
+          '';
         };
 
         repositories = mkOption {
@@ -155,6 +169,7 @@ let
     generators.toYAML { } {
       location = removeNullValues {
         source_directories = config.location.sourceDirectories;
+        patterns = config.location.patterns;
         repositories = config.location.repositories;
       } // config.location.extraConfig;
       storage = removeNullValues {
@@ -214,6 +229,15 @@ in {
     assertions = [
       (lib.hm.assertions.assertPlatform "programs.borgmatic" pkgs
         lib.platforms.linux)
+
+      {
+        assertion = all (
+          config: (config.location.sourceDirectories != null) !=
+            (config.location.patterns != null)
+        ) (builtins.attrValues cfg.backups);
+
+        message = "Exactly one of 'sourceDirectories' or 'patterns' must be set.";
+      }
     ];
 
     xdg.configFile = with lib.attrsets;
